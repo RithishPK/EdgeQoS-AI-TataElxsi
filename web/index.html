@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EDGEqos · Shared bandwidth</title>
+<style>
+:root{color-scheme:dark;font:16px system-ui;background:#08111d;color:#e8eff8}*{box-sizing:border-box}body{margin:0;padding:24px;max-width:1250px;margin:auto}header{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #29405b;padding-bottom:16px}h1{font-size:30px;margin:3px 0}h2{margin-top:30px}.brand,small,.muted{color:#9caec3}.brand{font-size:12px;letter-spacing:2px;color:#49d8b5}.badge{padding:8px 13px;border-radius:25px;background:#173547;color:#6ce3c2}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:22px 0}.card{padding:18px;border:1px solid #29405b;border-radius:12px;background:#101e2e}.value{font-size:26px;margin:5px 0}.table{overflow:auto;background:#101e2e;border:1px solid #29405b;border-radius:12px}table{width:100%;border-collapse:collapse;white-space:nowrap}th,td{text-align:left;padding:13px;border-bottom:1px solid #23364c}th{color:#9caec3;font-weight:500}.bar{height:8px;background:#23364c;border-radius:9px;min-width:90px}.bar i{display:block;height:100%;background:#49d8b5;border-radius:9px}.note{line-height:1.55;border-left:3px solid #49d8b5;padding:12px 16px;background:#101e2e;margin:16px 0;border-radius:4px}details{margin-top:25px}summary{cursor:pointer;font-size:19px}#error{color:#ffbba5}footer{margin:24px 0;color:#9caec3;font-size:12px}@media(max-width:750px){body{padding:15px}.cards{grid-template-columns:repeat(2,1fr)}h1{font-size:24px}}
+.switch-panel{display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-top:20px;padding:18px;border:1px solid #29405b;border-radius:12px;background:#101e2e}.switch-panel p{margin:6px 0;line-height:1.5}.switch-copy{flex:1;min-width:220px}#ai-toggle{font:600 17px system-ui;min-width:180px;padding:14px 18px;border:1px solid #608098;border-radius:28px;background:#26384a;color:#e8eff8;cursor:pointer}#ai-toggle[aria-checked="true"]{background:#116747;border-color:#49d8b5}#ai-toggle:disabled{opacity:.55;cursor:wait}#control-error,#override-error{color:#ffbba5}
+input,select{font:14px system-ui;padding:8px 10px;margin:3px 2px;border:1px solid #3c566f;border-radius:7px;background:#17293a;color:#e8eff8}
+form button,td button{font:600 14px system-ui;padding:8px 14px;margin:3px 2px;border:1px solid #608098;border-radius:7px;background:#26384a;color:#e8eff8;cursor:pointer}
+form button:hover,td button:hover{background:#2f4559}td button:disabled{opacity:.45;cursor:not-allowed}
+</style>
+<header><div><div class="brand">EDGEqos · RASPBERRY PI ROUTER</div><h1>Shared bandwidth</h1><small>One live view of the devices using the Pi hotspot</small></div><span class="badge" id="mode">Connecting…</span></header>
+<section class="switch-panel" aria-label="Router mode">
+<div class="switch-copy"><strong>AI traffic prioritization</strong><p id="routing-description">Reading router mode…</p><small id="control-access">Checking controls…</small><p id="control-error" role="status"></p></div>
+<button id="ai-toggle" type="button" role="switch" aria-checked="false" aria-label="Enable AI traffic prioritization" disabled>Checking…</button>
+</section>
+<div class="cards">
+<div class="card"><small>Download currently in use</small><div class="value" id="download">—</div><small id="down-cap">of — Mb/s configured</small></div>
+<div class="card"><small>Upload currently in use</small><div class="value" id="upload">—</div><small id="up-cap">of — Mb/s configured</small></div>
+<div class="card"><small>Total bandwidth in use</small><div class="value" id="rate">—</div><small>Combined download + upload across hotspot devices</small></div>
+<div class="card"><small>Observed since dashboard started</small><div class="value" id="total">—</div><small>Totals reset when EDGEqos restarts</small></div>
+</div>
+<p class="note"><b>How to read this:</b> “Bandwidth now” adds each device’s download and upload rate. “Share of total” is that device’s percentage of all three devices’ combined live bandwidth; the percentages add to about 100%. These are measured shares, not fixed reservations.</p>
+<p id="capture-health" class="muted" role="status">Checking measurement quality…</p>
+<p id="error" role="status"></p>
+<h2>Is prioritization actually helping?</h2>
+<p class="muted">Measured, not claimed. One small echo per interval to the uplink gateway, so this is the real path delay the router adds. Watch these four numbers while switching AI ON and OFF under a heavy download.</p>
+<div class="cards">
+<div class="card"><small>Typical delay (p50)</small><div class="value" id="rtt50">—</div><small id="probe-target">Probe starting…</small></div>
+<div class="card"><small>Worst 5% of delay (p95)</small><div class="value" id="rtt95">—</div><small>The number that makes calls stutter</small></div>
+<div class="card"><small>Jitter</small><div class="value" id="jitter">—</div><small>Variation between consecutive probes</small></div>
+<div class="card"><small>Probe loss</small><div class="value" id="loss">—</div><small id="fairness">Fairness: —</small></div>
+</div>
+<h2>Where the AI disagrees with port-based rules</h2>
+<p class="muted" id="divergence">Comparing both arms on the same live flows…</p>
+<div class="table"><table><thead><tr><th>Device</th><th>Destination</th><th>Port rule says</th><th>Rule matched</th><th>EDGEqos says</th><th>Decided by</th><th>Confidence</th></tr></thead><tbody id="diverge-rows"></tbody></table></div>
+<h2>Priority queues</h2>
+<p class="muted" id="shaping-note">Queues exist only while AI is ON. Backlog is traffic waiting; drops in <b>bulk</b> are the mechanism that protects the other queues.</p>
+<div class="table"><table><thead><tr><th>Direction</th><th>Queue</th><th>Rate now</th><th>Guaranteed floor</th><th>Waiting</th><th>Dropped</th><th>Sent</th><th>State</th></tr></thead><tbody id="queue-rows"></tbody></table></div>
+<h2>Operator overrides</h2>
+<p class="muted">An <b>intent</b> prioritizes one device for a fixed time and then expires by itself. A <b>correction</b> tells the model it was wrong about one destination, and is kept as labelled evidence rather than overwriting the prediction.</p>
+<div class="switch-panel">
+<form id="intent-form" class="switch-copy"><strong>Prioritize a device temporarily</strong>
+<p><input id="intent-client" placeholder="10.42.0.51" size="12" required>
+<select id="intent-queue"><option>realtime</option><option>interactive</option><option>best_effort</option><option>bulk</option></select>
+<select id="intent-ttl"><option value="300">5 min</option><option value="900">15 min</option><option value="1800" selected>30 min</option><option value="3600">1 hour</option></select>
+<input id="intent-note" placeholder="reason (optional)" size="16" maxlength="80">
+<button type="submit">Apply intent</button></p></form>
+<form id="correction-form" class="switch-copy"><strong>Correct a misclassified destination</strong>
+<p><input id="corr-remote" placeholder="142.250.0.1" size="12" required>
+<select id="corr-proto"><option value="6">TCP</option><option value="17">UDP</option></select>
+<input id="corr-port" type="number" min="0" max="65535" placeholder="443" size="5" required>
+<select id="corr-queue"><option>realtime</option><option>interactive</option><option>best_effort</option><option>bulk</option></select>
+<input id="corr-note" placeholder="reason (optional)" size="16" maxlength="80">
+<button type="submit">Apply correction</button></p></form>
+</div>
+<p id="override-error" role="status"></p>
+<div class="table"><table><thead><tr><th>Override</th><th>Target</th><th>Queue</th><th>Expires in</th><th>Times applied</th><th>Reason</th><th></th></tr></thead><tbody id="override-rows"></tbody></table></div>
+<h2>Which device is using the bandwidth?</h2><p class="muted">Sorted by download use. Names are supplied by the devices; match the IP if a name is missing.</p>
+<div class="table"><table><thead><tr><th>Device</th><th>IP on Tata-AI-Router</th><th>Bandwidth now (↓ + ↑)</th><th>Share of total</th><th>Downloading now</th><th>Uploading now</th><th>Received since start</th><th>Sent since start</th></tr></thead><tbody id="client-rows"></tbody></table></div>
+<h2>What EDGEqos classified</h2><p class="muted">Predictions remain visible in both modes; only AI ON uses them for priority. The installed model is an experimental synthetic demo, not validated app recognition.</p>
+<div class="table"><table><thead><tr><th>Device</th><th>Predicted behavior</th><th>Flows</th><th>Observed data</th><th>How to interpret</th></tr></thead><tbody id="class-rows"></tbody></table></div>
+<details><summary>Technical details</summary><p class="muted" id="model"></p><p class="muted" id="foot"></p><p class="muted">Only IPv4 traffic routed through the Pi hotspot is counted. Devices on the home router and same-network peer traffic can bypass the Pi. Traffic totals are observed IP packet bytes, not a billing meter. Classification uses flow metadata, not packet payload contents.</p></details>
+<footer>Refreshes every 2 seconds · Mode changes preserve traffic totals · Allow 10 seconds after switching for the rate window to settle</footer>
+<script>
+const $=id=>document.getElementById(id);function cell(row,text){const el=document.createElement('td');el.textContent=text;row.appendChild(el)}function fmtBytes(n){const u=['B','KiB','MiB','GiB','TiB'];let i=0;while(n>=1024&&i<u.length-1){n/=1024;i++}return n.toFixed(i?1:0)+' '+u[i]}function share(n,total){return total>0?(n/total*100):0}function capacity(n,cap){return cap>0?Math.min(100,n/cap*100):0}const meaning={gaming:'Likely online gaming - high priority when confident',streaming:'Likely video streaming, such as YouTube (app unverified) - normal priority',interactive:'Likely browsing or interactive app - responsive priority',realtime:'Likely voice/video call or other real-time traffic - high priority',bulk:'Likely download, update or speed test - background priority',best_effort:'General traffic - normal priority',unknown:'Insufficient evidence; safe normal priority'};
+function showCaptureHealth(s){
+  const recent=s.capture_interval;
+  const stale=s.sampled_at && Date.now()/1000-s.sampled_at>10;
+  const el=$('capture-health');
+  if(stale){el.textContent='Measurement update delayed. Live rates may be stale.';el.style.color='#ffbba5';return;}
+  if(!recent){el.textContent='Capture quality information is loading.';return;}
+  const missed=s.counters.socket_drops||0;
+  el.style.color=recent.drops?'#ffbba5':'#9caec3';
+  el.textContent=recent.drops
+    ? `Measurement missed ${recent.drops} packets (${recent.drop_percent}%) in the latest interval. Rates may be understated. Total missed since service start: ${missed}.`
+    : `Measurement: ${recent.packets ? 'no new capture drops' : 'waiting for traffic'} in the latest interval. Total missed since service start: ${missed}.`;
+}
+let controlToken=null,latestState=null,posting=false;
+function renderControl(s){
+  const c=s.control||{},on=!!c.ai_enabled,busy=!!c.pending||posting;
+  $('ai-toggle').setAttribute('aria-checked',String(on));
+  $('ai-toggle').disabled=!controlToken||busy;
+  $('ai-toggle').textContent=busy?'Applying…':on?'AI ON':'AI OFF';
+  $('mode').textContent=busy?'Changing mode…':on?'AI priority':'Normal routing';
+  $('control-error').textContent=c.error||'';
+  $('routing-description').textContent=on
+    ? `AI ON: experimental model priorities; total limits ${s.download_mbit} Mb/s down / ${s.upload_mbit} Mb/s up. No fixed per-device split.`
+    : 'AI OFF: normal routing. Devices share bandwidth according to demand; EDGEqos applies no bandwidth limits or priority rules.';
+}
+async function initControls(){
+  try{
+    const r=await fetch('/api/control',{cache:'no-store'});
+    if(!r.ok)throw new Error('view-only');
+    const c=await r.json();controlToken=c.token;
+    $('control-access').textContent='Switch applies to all hotspot devices. Service restarts return to the saved mode (currently AI OFF).';
+  }catch(e){$('control-access').textContent='View-only here. Use the designated admin laptop or the Pi desktop to switch modes.';}
+  if(latestState)renderControl(latestState);
+}
+$('ai-toggle').addEventListener('click',async()=>{
+  if(!controlToken||!latestState||posting)return;
+  posting=true;renderControl(latestState);
+  try{
+    const r=await fetch('/api/control',{method:'POST',headers:{'Content-Type':'application/json','X-EdgeQoS-Token':controlToken},body:JSON.stringify({ai_enabled:!latestState.control.ai_enabled})});
+    const data=await r.json();
+    if(!r.ok)throw new Error(data.error||'Mode change failed');
+    posting=false;await update();
+  }catch(e){posting=false;renderControl(latestState);$('control-error').textContent=e.message;}
+});
+function ms(v){return typeof v==='number'?v.toFixed(1)+' ms':'—'}
+function showLatency(s){
+  const l=s.latency||{};
+  $('rtt50').textContent=ms(l.rtt_p50_ms);$('rtt95').textContent=ms(l.rtt_p95_ms);
+  $('jitter').textContent=ms(l.jitter_ms);
+  $('loss').textContent=typeof l.loss_percent==='number'?l.loss_percent.toFixed(1)+'%':'—';
+  $('probe-target').textContent=l.error?l.error
+    :l.target?`${l.samples} probes to gateway ${l.target}`:'Probe starting…';
+  const f=s.fairness||{};
+  $('fairness').textContent=f.download==null
+    ? 'Fairness: idle (needs two active devices)'
+    : `Fairness: ${f.download.toFixed(2)} down / ${f.upload==null?'—':f.upload.toFixed(2)} up across ${f.clients} devices (1.00 is an equal split)`;
+}
+function showDivergence(s,flows){
+  const c=s.baseline_comparison||{};
+  $('divergence').textContent=c.decided_flows
+    ? `${c.disagreements} of ${c.decided_flows} model-classified flows (${c.divergence_percent}%) are placed differently than a port-number rule table would place them`
+      +`${c.operator_overridden_flows?`, plus ${c.operator_overridden_flows} flows placed by an operator override`:''}. `
+      +(Object.entries(c.reclassifications||{}).map(([k,v])=>`${k}: ${v}`).join(' · ')||'')
+    : 'No flows have passed the warm-up window yet. Open a video or large download.';
+  $('diverge-rows').replaceChildren();
+  const moved=flows.filter(f=>f.baseline_label&&f.label!==f.baseline_label).slice(0,12);
+  for(const f of moved){
+    const tr=document.createElement('tr');
+    cell(tr,f.client);cell(tr,`${f.remote}:${f.remote_port}/${f.protocol}`);
+    cell(tr,f.baseline_label);cell(tr,f.baseline_rule||'—');cell(tr,f.label);cell(tr,f.source);
+    cell(tr,f.source.startsWith('operator')?'operator override'
+      :f.confidence==null?'—':(f.confidence*100).toFixed(0)+'%');
+    $('diverge-rows').appendChild(tr);
+  }
+  if(!moved.length){const tr=document.createElement('tr');
+    cell(tr,c.decided_flows?'Both methods currently agree on every flow':'Waiting for classified flows');
+    $('diverge-rows').appendChild(tr);}
+}
+function showQueues(s){
+ if(s.scheduler==="cake"){ $("queue-rows").replaceChildren(); $("shaping-note").textContent=s.control.ai_enabled?"CAKE active: four priority tins, fair sharing, 40 Mb/s download / 12 Mb/s upload. HTB counters do not apply.":"CAKE selected; AI is OFF and normal routing is active."; return; } 
+  $('queue-rows').replaceChildren();
+  const directions=Object.entries(s.shaping||{});
+  const shaped=directions.filter(([,d])=>d.shaped);
+  $('shaping-note').textContent=shaped.length
+    ? `Live HTB class counters read back from the kernel. Drops in bulk are the mechanism that protects the other queues. ${shaped.map(([k,d])=>`${k} ceiling ${d.capacity.applied_mbit} Mb/s (${d.capacity.last_decision})`).join(' · ')}`
+    : 'No queues: AI is OFF, so the kernel is scheduling normally and nothing is being prioritized.';
+  for(const [direction,d] of directions){
+    if(!d.shaped)continue;
+    for(const [name,q] of Object.entries(d.queues)){
+      const tr=document.createElement('tr'),starved=(d.starved_queues||[]).includes(name);
+      cell(tr,direction);cell(tr,name);cell(tr,q.rate_mbit.toFixed(2)+' Mb/s');
+      cell(tr,(d.guaranteed_floor_mbit[name]||0).toFixed(2)+' Mb/s');
+      cell(tr,q.backlog_packets+' pkt');cell(tr,String(q.drops));cell(tr,fmtBytes(q.bytes));
+      cell(tr,starved?'below floor':q.backlog_packets?'queueing':'clear');
+      if(starved)tr.lastChild.style.color='#ffbba5';
+      $('queue-rows').appendChild(tr);
+    }
+  }
+  if(!$('queue-rows').children.length){const tr=document.createElement('tr');
+    cell(tr,'—');cell(tr,'Queues appear when AI is ON');$('queue-rows').appendChild(tr);}
+}
+function showOverrides(s){
+  const o=s.overrides||{};
+  $('override-rows').replaceChildren();
+  for(const i of o.intents||[]){
+    const tr=document.createElement('tr');
+    cell(tr,'intent');cell(tr,i.client);cell(tr,i.queue);
+    cell(tr,Math.max(0,Math.round(i.expires_in_seconds))+' s');
+    cell(tr,String((o.applied||{}).intent||0));cell(tr,i.note||'—');
+    addClear(tr,'/api/intent',{clear:true,client:i.client});$('override-rows').appendChild(tr);
+  }
+  for(const c of o.corrections||[]){
+    const tr=document.createElement('tr');
+    cell(tr,'correction');cell(tr,`${c.remote}:${c.remote_port}/${c.protocol}`);cell(tr,c.queue);
+    cell(tr,'does not expire');cell(tr,String(c.hits));cell(tr,c.note||'—');
+    addClear(tr,'/api/correction',{clear:true,remote:c.remote,
+      protocol:c.protocol==='UDP'?17:6,remote_port:c.remote_port});
+    $('override-rows').appendChild(tr);
+  }
+  if(!$('override-rows').children.length){const tr=document.createElement('tr');
+    cell(tr,'none active');cell(tr,'The model decides every flow on its own.');
+    $('override-rows').appendChild(tr);}
+}
+function addClear(row,path,body){
+  const td=document.createElement('td'),button=document.createElement('button');
+  button.type='button';button.textContent='Clear';button.disabled=!controlToken;
+  button.addEventListener('click',()=>send(path,body));
+  td.appendChild(button);row.appendChild(td);
+}
+async function send(path,body){
+  $('override-error').textContent='';
+  if(!controlToken){$('override-error').textContent='Controls are view-only on this device.';return;}
+  try{
+    const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json',
+      'X-EdgeQoS-Token':controlToken},body:JSON.stringify(body)});
+    const data=await r.json();
+    if(!r.ok)throw new Error(data.error||'Request rejected');
+    await update();
+  }catch(e){$('override-error').textContent=e.message;}
+}
+$('intent-form').addEventListener('submit',e=>{e.preventDefault();
+  send('/api/intent',{client:$('intent-client').value.trim(),queue:$('intent-queue').value,
+    ttl_seconds:Number($('intent-ttl').value),note:$('intent-note').value});});
+$('correction-form').addEventListener('submit',e=>{e.preventDefault();
+  send('/api/correction',{remote:$('corr-remote').value.trim(),protocol:Number($('corr-proto').value),
+    remote_port:Number($('corr-port').value),queue:$('corr-queue').value,note:$('corr-note').value});});
+async function update(){
+  try{
+    const r=await fetch('/api/status',{cache:'no-store'}),s=await r.json();
+    latestState=s;showCaptureHealth(s);renderControl(s);
+    const clients=s.clients||[],flows=s.flows||[];
+    showLatency(s);showDivergence(s,flows);showQueues(s);showOverrides(s);
+    const down=clients.reduce((a,c)=>a+c.download_mbit,0),up=clients.reduce((a,c)=>a+c.upload_mbit,0),combined=down+up;
+    $('download').textContent=down.toFixed(2)+' Mb/s';$('upload').textContent=up.toFixed(2)+' Mb/s';
+    $('rate').textContent=combined.toFixed(2)+' Mb/s';$('total').textContent=fmtBytes(s.counters.routed_candidate_bytes||0);
+    const on=s.control&&s.control.ai_enabled;
+    $('down-cap').textContent=`AI download limit: ${s.download_mbit} Mb/s (${on?'active':'inactive'})`;
+    $('up-cap').textContent=`AI upload limit: ${s.upload_mbit} Mb/s (${on?'active':'inactive'})`;
+    $('error').textContent=s.error||s.capture_error||s.model_error||'';
+    $('client-rows').replaceChildren();
+    for(const c of clients){
+      const tr=document.createElement('tr'),rate=c.download_mbit+c.upload_mbit;
+      cell(tr,c.hostname||'Name not reported');cell(tr,c.client);cell(tr,rate.toFixed(2)+' Mb/s');
+      cell(tr,share(rate,combined).toFixed(1)+'%');cell(tr,c.download_mbit.toFixed(2)+' Mb/s');
+      cell(tr,c.upload_mbit.toFixed(2)+' Mb/s');cell(tr,fmtBytes(c.download_bytes));cell(tr,fmtBytes(c.upload_bytes));
+      $('client-rows').appendChild(tr);
+    }
+    $('class-rows').replaceChildren();
+    for(const c of clients){
+      const groups={};
+      for(const f of flows.filter(f=>f.client===c.client)){
+        const k=(f.source==='low-confidence'||f.source==='warmup'||f.source==='model-error')?'unknown':(f.predicted_label||'unknown');
+        if(!groups[k])groups[k]={flows:0,bytes:0};groups[k].flows++;groups[k].bytes+=f.bytes;
+      }
+      for(const [kind,g] of Object.entries(groups)){
+        const tr=document.createElement('tr');cell(tr,c.hostname||c.client);cell(tr,kind);cell(tr,g.flows);
+        cell(tr,fmtBytes(g.bytes));cell(tr,meaning[kind]||'No confident app identification');$('class-rows').appendChild(tr);
+      }
+    }
+    if(!$('class-rows').children.length){const tr=document.createElement('tr');cell(tr,'No routed flows yet');cell(tr,'Open a website or video.');$('class-rows').appendChild(tr);}
+    $('model').textContent=`Scheduler: ${s.scheduler||"htb"}. Model: ${s.model_kind}, trained on ${s.model_provenance}. ${on?'Priority queues are active.':'Normal routing; model predictions do not control bandwidth.'} Descriptions are behavior estimates, not confirmed app identities. Low-confidence traffic uses normal priority. The ON/OFF comparison includes the configured aggregate bandwidth limits.`;
+    $('foot').textContent=`Active flows: ${s.active_flows}. Service uptime: ${Math.floor(s.uptime_seconds)} seconds. `
+      +`Capture drops: ${s.counters.socket_drops}. ${s.coverage} `
+      +`Link capacity is re-estimated from achieved throughput while saturated; field accuracy on real applications is not validated.`
+      +(s.capacity_error?` Capacity error: ${s.capacity_error}.`:'');
+    if(!r.ok){$('mode').textContent='Router needs attention';$('ai-toggle').disabled=true;}
+  }catch(e){$('mode').textContent='DISCONNECTED';$('ai-toggle').disabled=true;$('error').textContent='Dashboard cannot reach the router service: '+e.message;}
+}
+update();initControls();setInterval(update,2000);
+</script></html>
