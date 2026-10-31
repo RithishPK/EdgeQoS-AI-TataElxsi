@@ -8,8 +8,8 @@ A Confidence-Gated Learning Framework for Encrypted Traffic Prioritization and A
   <img alt="nftables" src="https://img.shields.io/badge/Networking-nftables-0B7285?style=for-the-badge">
   <img alt="GitHub" src="https://img.shields.io/badge/Project-Tata_Elxsi_Teliport_S4-181717?style=for-the-badge&logo=github&logoColor=white">
 </p><p align="center">
-  <b>Team Poneglyph Parsers · NMIT Bengaluru</b><br>
-  Tata Elxsi Teliport Season 4 · Case Study 3
+  <b>Rithish PK · Chinmay Deepak Chandavar</b><br>
+  NMIT Bengaluru · Tata Elxsi Teliport Season 4 · Case Study 3
 </p>Overview
 EdgeQoS-AI is an edge-based Quality of Service (QoS) prototype for mixed home-broadband traffic. It observes packet-header metadata, extracts flow-level behaviour features, uses a Random Forest classifier to estimate traffic behaviour, and maps sufficiently confident predictions to Linux traffic-control policies.
 
@@ -145,8 +145,8 @@ Current scope and limitations
 - The code includes a capacity-estimation module, but automatic capacity control is configuration-dependent. The supplied experiment documentation does not establish that automatic capacity adaptation was enabled in the reported demo.
 - Additional streaming and video-call classes require labelled captures, retraining and separate evaluation.
 - Dashboard predictions are experimental flow-behaviour classifications, not guaranteed application identity.
-Team
-Team Poneglyph Parsers
+Contributors
+Rithish PK · Chinmay Deepak Chandavar
 Nitte Meenakshi Institute of Technology (NMIT), Bengaluru
 Tata Elxsi Teliport Season 4 · Case Study 3
 Acknowledgement
