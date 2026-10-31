@@ -92,17 +92,20 @@ The project results document states that 62% of game traffic and all download tr
 
 Interpretation note: classification accuracy and confidence coverage are different metrics. The reported 90–97% and 95% class results should be read alongside the 84–96% confident-coverage figure and the original experiment methodology. These figures should not be collapsed into one overall accuracy number.
 
-For a future detailed evidence package, add the reviewed experiment log and benchmark plots under docs/ and results/. Keep each report's test conditions and metric definitions together with its charts.
+The public repository currently contains the core implementation, dashboard, router utility, tools and public baseline model. Detailed raw experiment logs, benchmark plots and the private home-labelled captures are not part of this published source snapshot. Add only reviewed, anonymized evidence files, and keep each chart with its test conditions and metric definitions.
 Repository structure
+The published repository is organized as follows:
+<pre>
 EdgeQoS-AI-TataElxsi/
-├── edgeqos/                 # Capture, flow processing, model, policy and service modules
-├── web/                     # Browser dashboard
-├── router/                  # Router/uplink reconciliation utility
-├── tools/                   # Capture, training and benchmark utilities
-├── models/                  # Public-data baseline model artifact
-├── README.md
-└── .gitignore
-The public repository currently contains the core implementation, dashboard, router utility, tools and public baseline model. Local network configuration and labelled home captures are intentionally not included in this published source snapshot.
+├── edgeqos/     Core Python modules: capture, flow processing, model, policy and service
+├── web/         Browser-based dashboard
+├── router/      Router and uplink utility
+├── tools/       Capture, training and benchmark scripts
+├── models/      Public-data baseline model artifact
+├── README.md    Project overview and documentation
+└── .gitignore   Excludes local and generated files
+</pre>
+Local network configuration, credentials, device-specific identifiers and labelled home captures are intentionally excluded from the public repository.
 Getting started
 Requirements
 The runtime is designed for a Linux-based edge router. The router-side components interact with Linux networking facilities, including packet capture, nftables, tc and (for the supplied router reconciliation script) NetworkManager. Administrative privileges are required for network capture and traffic-control changes.
